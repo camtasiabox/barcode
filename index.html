@@ -1,0 +1,680 @@
+<!DOCTYPE html><html lang="uk-UA">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>48.22 Code Generator</title>
+  <meta name="description" content="Генератор штрих-кодів.">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    :root {
+      --bg: #e7dfd5;
+      --text: #111;
+      --muted: #2b2b2b;
+      --btn-grad-top: #5a5a5a;
+      --btn-grad-bottom: #3a3a3a;
+      --card-bg: #fff;
+      --border: #ccc;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { font-family: 'Roboto', sans-serif; background-color: var(--bg); margin: 0; color: var(--text); padding: 0 40px; }
+    .hero { max-width: 1200px; margin: 0 auto; padding: 24px 20px 0; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 20px; }
+    .brand img { width: 115px; height: auto; display: inline-block; }
+    .brand .text-container { display: inline-block; vertical-align: middle; }
+    .brand .text-container p { margin: 0; color: #fff; font-size: 48pt; line-height: 1; font-weight: 700; }
+    .qr-button { padding: 10px 20px; font-size: 16px; border: 2px solid #333; border-radius: 8px; background: transparent; color: #111; text-decoration: none; transition: all 0.2s ease-in-out;  display: flex; align-items: center; justify-content: center; }
+    .qr-button:hover { background: #333; color: #fff; }
+    .hero-actions { display: flex; align-items: center; gap: 12px; }
+    .qr-button:hover { background: #333; color: #fff; }
+    .card { max-width: 1200px; margin: 24px auto; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 3px 12px rgba(0,0,0,.06); }
+    .controls { display: grid; grid-template-columns: repeat(6, minmax(160px, 1fr)); gap: 12px 16px; align-items: end; }
+    .field label { font-weight: 500; display: inline-block; margin-bottom: 6px; }
+    input[type="text"], input[type="number"], select { width: 100%; height: 38px; font-size: 16px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+    .checkbox-row { display: flex; align-items: center; gap: 10px; height: 38px; }
+    button { height: 38px; font-size: 16px; line-height: 16px; padding: 10px 16px; border: none; border-radius: 10px; background: linear-gradient(to bottom, var(--btn-grad-top), var(--btn-grad-bottom)); color: #fff; box-shadow: 0 5px 0 var(--muted); cursor: pointer; transition: all 0.2s ease-in-out; max-width: fit-content; white-space: nowrap; }
+    button:hover { background: linear-gradient(to bottom, var(--btn-grad-bottom), var(--btn-grad-top)); transform: translateY(-2px); }
+    button:active { box-shadow: none; transform: translateY(2px); }
+    .btn-disabled, .downloads button:disabled { opacity: .6; cursor: not-allowed; box-shadow: none; }
+    .barcode-area { margin-top: 24px; display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+    .barcode-canvas { min-height: 140px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 10px; padding: 16px; background: #f5f7f7; }
+    .downloads { display: flex; gap: 12px; flex-wrap: wrap; }
+    .help { margin-top: 24px; color: #222; background: #fdf8f2; border: 1px solid #ede7df; border-radius: 10px; padding: 16px; }
+    .instructions { margin-top: 24px; padding: 16px; background: #fff; border: 1px solid #ccc; border-radius: 10px; font-size: 15px; line-height: 1.5; }
+    .instructions h3 { margin-top: 0; }
+    .footer-text { margin: 40px auto; max-width: 900px; padding: 20px; font-size: 15px; line-height: 1.6; color: #111; }
+    .error { color: #b00020; font-weight: 500; }
+    @media (max-width: 1100px) { .controls { grid-template-columns: repeat(3, minmax(160px, 1fr)); } }
+    @media (max-width: 700px)  { .controls { grid-template-columns: 1fr; } button { width: 100%; max-width: 100%; } }
+    @media (max-width: 800px) { .brand .text-container p { font-size: 36pt; } }
+    @media (max-width: 600px) { .brand .text-container p { font-size: 28pt; } }
+    a, a:visited { color: #000000; }
+  
+  /* Ensure proper stacking on narrow screens: keep Format in the first row (second position) */
+  @media (max-width: 700px) {
+    .controls { grid-template-columns: 1fr; grid-auto-flow: row; }
+    .controls .field { grid-row: auto !important; order: initial; }
+    /* Order the fields explicitly to avoid drops caused by forced grid-row on wide screens */
+    .controls .field:nth-of-type(1) { order: 1; }  /* Barcode value */
+    .controls .field:nth-of-type(2) { order: 2; }  /* Format */
+    .controls .field:nth-of-type(3) { order: 3; }  /* Bar width */
+    .controls .field:nth-of-type(4) { order: 4; }  /* Height */
+    .controls .field:nth-of-type(5) { order: 5; }  /* Margin */
+    .controls .field:nth-of-type(6) { order: 6; }  /* Show human-readable text (checkbox) */
+    .controls .field:nth-of-type(7) { order: 7; }  /* Generate button */
+  }
+
+  @font-face {
+    font-family: 'OCRBStd';
+    src: url('fonts/OCRBStd.woff') format('woff');
+    
+    unicode-range: U+0030-0039;
+    
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+  
+  /* Fix dropping issue on small screens: reset forced grid-row */
+  @media (max-width: 700px) {
+    #widthInput, #heightInput, #marginInput {
+      grid-row: auto !important;
+    }
+    #formatSelect {
+      grid-row: auto !important;
+    }
+  }
+  
+  /* Ensure first row = Barcode value + Format on medium screens */
+  @media (min-width: 701px) and (max-width: 1100px) {
+    .controls { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+    .controls .field.field--value { grid-column: span 2 !important; }
+    .controls .field.field--format { grid-column: span 1 !important; max-width: none; }
+    /* Keep Width/Height/Margin on row 2 */
+    .controls #widthInput, 
+    .controls #heightInput,
+    .controls #marginInput {
+      grid-row: 2 !important;
+    }
+  }
+  
+  }
+ 
+  /* Place the 'Show human-readable text' checkbox next to Format on wide screens */
+  @media (min-width: 1101px) {
+    .controls .field.field--checkbox {
+      grid-column: 6 !important;
+      grid-row: 1 !important;
+      align-self: end;
+      justify-self: start;
+    }
+  }
+  
+  /* Tighten spacing between Format and the checkbox on very wide screens */
+  @media (min-width: 1101px) {
+    .controls { gap: 12px 8px; } /* row-gap stays 12px; column-gap reduced to 8px */
+    .controls .field.field--format {
+      grid-column: 5 / span 1 !important;  /* make Format occupy a single column (adjacent to col 6) */
+      grid-row: 1 !important;
+      max-width: 220px;
+    }
+    .controls .field.field--checkbox {
+      grid-column: 6 / span 1 !important;  /* place checkbox right next to Format */
+      grid-row: 1 !important;
+      align-self: end;
+      justify-self: start;
+    }
+  }
+ 
+  /* Option B: Format + checkbox flex container, Barcode value 30% narrower */
+  .field--format-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: end;
+  }
+  .field--format-wrap .field { margin: 0; }
+  @media (min-width: 1101px) {
+    .controls .field.field--value {
+      grid-column: 1 / span 3 !important;
+      grid-row: 1 !important;
+      max-width: 70% !important; /* 30% smaller */
+    }
+    .controls .field--format-wrap {
+      grid-column: 4 / span 3 !important;
+      grid-row: 1 !important;
+    }
+  }
+  @media (max-width: 700px) {
+    .field--format-wrap { display: block; }
+  }
+
+  
+  /* Wide-screen grid packing: value 2 cols; format+checkbox 4 cols */
+  @media (min-width: 1101px) {
+    .controls { grid-template-columns: repeat(6, minmax(160px, 1fr)); }
+    .controls .field.field--value { grid-column: 1 / span 2 !important; grid-row: 1 !important; max-width: none !important; }
+    .controls .field--format-wrap { grid-column: 3 / span 4 !important; grid-row: 1 !important; display: flex; gap: 8px; align-items: end; }
+    .controls .field.field--format { grid-column: auto !important; grid-row: auto !important; }
+    .controls .field.field--checkbox { grid-column: auto !important; grid-row: auto !important; }
+  }
+  
+/* --- Mobile relocation of header buttons --- */
+.desktop-only { display: flex; }
+.mobile-only { display: none; }
+
+@media (max-width: 700px) {
+  .desktop-only { display: none; }
+  .mobile-only { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 0; }
+  .mobile-only .qr-button { width: 100%; }
+}
+
+.qr-button.old-version { opacity: 0.5; }
+
+@media (max-width: 700px) {
+  .brand { justify-content: flex-start; }
+  .brand img { margin-left: 0; }
+}
+</style>
+<script>
+(function () {
+    var authorized = '48.22web.org';
+    var host = window.location.hostname;
+
+    if (location.protocol === 'file:' || host !== authorized) {
+        document.documentElement.innerHTML = '<h1>no</h1>';
+        location.replace('https://' + authorized + '/');
+        throw new Error('BarCode');
+    }
+})();
+</script>
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <img src="https://i.imgur.com/Ymo8bHh.gif" alt="Barcode Generator Logo">
+      <div class="text-container">
+        <p>48.22 CODE GENERATOR</p>
+      </div>
+    </div>
+    <div class="hero-actions desktop-only">
+      <a href="#" class="qr-button">QR code generator</a>
+      <a href="#" class="qr-button">Pantone generator</a>
+      <a href="#" class="qr-button old-version">Old version</a>
+    </div>
+  </header>
+
+  <!-- Mobile buttons placed below GIF and H1 -->
+  <div class="hero-actions mobile-only">
+    <a href="#" class="qr-button">QR code generator</a>
+    <a href="#" class="qr-button">Pantone generator</a>
+    <a href="#" class="qr-button old-version">Old version</a>
+  </div>
+
+  <main class="card">
+    <div class="controls">
+      <div class="field field--value" style="grid-column: span 3;">
+        <label for="textInput">Номер штрих-коду</label>
+        <input type="text" id="textInput" placeholder="Enter data, e.g. 4820034920107" value="4820034920107">
+      </div>
+      <div class="field field--format-wrap" style="grid-column: span 3;">
+          <div class="field field--format" style="grid-column: span 2; max-width: 220px;">
+        <label for="formatSelect">Формат</label>
+        <select id="formatSelect">
+          <option value="CODE128">CODE128</option>
+          <option value="CODE93">CODE93</option>
+          <option value="EAN13" selected="">EAN-13</option>
+          <option value="EAN8">EAN-8</option>
+          <option value="EAN5">EAN-5</option>
+          <option value="EAN2">EAN-2</option>
+          <option value="UPCA">UPC-A</option>
+          <option value="UPCE">UPCE</option>
+          <option value="CODE39">CODE39</option>
+          <option value="codabar">Codabar</option>
+          <option value="ITF14">ITF-14</option>
+          <option value="ITF">ITF</option>
+          <option value="MSI">MSI</option>
+          <option value="pharmacode">Pharmacode</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column: span 1; grid-row: 2;">
+        <label for="widthInput">Ширина (px)</label>
+        <input type="number" id="widthInput" min="1" max="6" value="2">
+      </div>
+      <div class="field" style="grid-column: span 1; grid-row: 2;">
+        <label for="heightInput">Висота (px)</label>
+        <input type="number" id="heightInput" min="30" max="300" value="100">
+      </div>
+      <div class="field" style="grid-column: span 1; grid-row: 2;">
+        <label for="marginInput">Відступ поля (px)</label>
+        <input type="number" id="marginInput" min="0" max="30" value="10">
+      </div>
+      <div class="field field--checkbox">
+        <div class="checkbox-row">
+          <input type="checkbox" id="displayValue" checked="">
+          <label for="displayValue">Показати ‑ цифри коду</label>
+        </div>
+      </div>
+        </div>
+      <div class="field" style="grid-column: span 2;">
+        <button id="generateBtn" onclick="generateBarcode()">Згенерувати штрих-код</button>
+      </div>
+    </div>
+
+    <section class="barcode-area">
+
+      <div id="errorBlock" class="error" style="display: block;">Помилка суми: Штрих-код не визначено</div>
+      <div class="barcode-canvas" id="barcodeDisplay">
+        <svg id="barcodeSVG" role="img" aria-label="Barcode preview"></svg>
+      </div>
+      <div class="downloads">
+        <button id="btnSVG" onclick="downloadSVG()" disabled="" aria-disabled="true">Завантажити файл</button>
+        <button id="btnPNG" onclick="copySVG()" disabled="" aria-disabled="true">Скопіювати штрих-код</button>
+      </div>
+      <div class="help" id="gs1InfoBox" style="display:none;">
+        <strong>GS1 prefix:</strong> <span id="gs1Prefix">—</span> — <span id="gs1Country">—</span>
+        <div style="font-size:13px; color:#333; margin-top:6px;">
+          Note: Префікс штрих-коду GS1 показує країну походження (або внутрішній код продукту компанії). Деякі варіації є підмножиною поширених префіксів.
+        </div>
+      </div>
+      <div class="help" id="checkDigitBox" style="display:none;">
+        <strong>Check digit:</strong> <span id="checkExpected">—</span> — <span id="checkStatus">—</span>
+        <div style="font-size:13px; color:#333; margin-top:6px;">
+          Верифікація для формату EAN‑13, EAN‑8, UPC‑A, and ITF‑14. 
+        </div>
+    </div></section>
+
+    <div class="help">
+      Важливо:  Для генерації штрих-коду оптових етикеток, використовуйте формат CODE 128 які мають в основі 14 цифр.
+    </div>
+
+    <div class="instructions">
+      <h3>Інструкція:</h3>
+      <ul>
+        <li>Введіть дійсний номер штрих-коду в поле введення «Номер штрих-коду» (наприклад 4820034920107)</li>
+        <li>Встановіть для параметра «Формат» потрібне вам значення (EAN13) і натисніть «Згенерувати штрих-код»</li>
+        <li>Завантажте на свій ПК штрих-код згенерований у векторному форматі (SVG) натиснувши на кнопку.</li>
+		<li>Скопійований векторний (штрих-код) можна відразу вставити в програму illustrator комбінацією [ Ctrl ]+[ V ]</li>
+		<li>OCR-B моноширинний шрифт для редагування цифр штрих-коду - <a href="#" download>завантажити</a> та встановити на ПК</li>
+      </ul>
+    </div>
+  </main>
+
+  <div class="footer-text">
+    <p>Генератор штрих-кодів – це зручний інструмент, який дозволяє легко створювати штрих-коди для ваших макетів. Штрих-код генерується у векторному форматі, для подальшого редагування в програмі Adobe illustrator.</p>
+    
+    <p>Відповіді на питання: </p>
+    <!-- <p>Відділ маркетингу: <a href="https://www.fozzy.ua" target="\" _blank\""="">www.fozzy.ua</a></p> -->
+  </div>
+  <script src="https://cdn.jsdelivr.net/gh/camtasiabox/barcode@main/allBarcode.js"></script>
+ <!-- <script src="js/JsBarcode.all.min.js"></script>  -->
+  <script>
+    // --- State ---
+    let lastSVGString = null;
+    const formatMap = { 'CODE128': 'CODE128', 'CODE93': 'CODE93', 'EAN13': 'EAN13', 'EAN8': 'EAN8', 'EAN5': 'EAN5', 'EAN2': 'EAN2', 'UPCA': 'UPC', 'UPCE': 'UPCE', 'CODE39': 'CODE39', 'codabar': 'codabar', 'ITF14': 'ITF14', 'ITF': 'ITF', 'MSI': 'MSI', 'pharmacode': 'pharmacode' };
+
+    // --- Utils ---
+    function removeSpaces(s){ return (s || '').split(' ').join(''); }
+    function onlyDigits(s){ let out=''; for (let i=0;i<s.length;i++){ const ch=s[i]; if (ch>='0' && ch<='9') out+=ch; } return out; }
+    function onlyCode39(s){ const allowed = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -. $/+%'; let out=''; for (let i=0;i<s.length;i++){ const ch=s[i]; if (allowed.indexOf(ch) !== -1) out+=ch; } return out; }
+
+    function onlyCodabar(s){
+      const allowed = '0123456789-$:/.+ABCD';
+      let out='';
+      for (let i=0;i<s.length;i++){ const ch=s[i].toUpperCase(); if (allowed.indexOf(ch) !== -1) out+=ch; }
+      return out;
+    }
+
+
+    function sanitizeInput(value, fmt){
+      let v = (value||'').trim();
+      v = removeSpaces(v);
+      if (fmt==='CODE39' || fmt==='CODE93') return onlyCode39(v.toUpperCase());
+      if (fmt==='codabar') return onlyCodabar(v.toUpperCase());
+      if (['EAN13','EAN8','EAN5','EAN2','UPCA','UPCE','ITF14','ITF','MSI','pharmacode'].includes(fmt)) return onlyDigits(v);
+      return v;
+    }
+
+    function validate(value, fmt){
+      if (!value) return { ok:false, msg:'Please enter data to encode.' };
+      const len = value.length;
+      if (fmt==='EAN13' && !(len===12 || len===13)) return { ok:false, msg:'EAN‑13 must be 12 or 13 digits.' };
+      if (fmt==='EAN8'  && !(len===7  || len===8 )) return { ok:false, msg:'EAN‑8 must be 7 or 8 digits.' };
+      if (fmt==='UPCA'  && !(len===11 || len===12)) return { ok:false, msg:'UPC‑A must be 11 or 12 digits.' };
+      if (fmt==='UPCE' && !(len===6 || len===8)) return { ok:false, msg:'UPC‑E must be 6 or 8 digits.' };
+      if (fmt==='EAN5' && len!==5)            return { ok:false, msg:'EAN‑5 must be exactly 5 digits.' };
+      if (fmt==='EAN2' && len!==2)            return { ok:false, msg:'EAN‑2 must be exactly 2 digits.' };
+      if (fmt==='ITF'  && (len<2 || (len%2)!==0)) return { ok:false, msg:'ITF requires an even number of digits (≥2).' };
+      if (fmt==='ITF14' && !(len===13 || len===14)) return { ok:false, msg:'ITF‑14 must be 13 or 14 digits.' };
+      if (fmt==='MSI'   && len<1)                 return { ok:false, msg:'MSI requires at least 1 digit.' };
+      if (fmt==='codabar' && len<2)              return { ok:false, msg:'Codabar requires at least 2 characters.' };
+      if (fmt==='codabar' && !/^[ABCD].*[ABCD]$/.test(value.toUpperCase())) {
+        // Not a hard failure—Codabar typically uses A-D start/stop. We allow it but show a soft hint in UI via error block if needed.
+      }
+      if (fmt==='pharmacode'){
+        const n = parseInt(value,10);
+        if (!(n>=3 && n<=131070)) return { ok:false, msg:'Pharmacode must be between 3 and 131070.' };
+      }
+      return { ok:true };
+    }
+
+    function showError(msg){
+      const el = document.getElementById('errorBlock');
+      el.textContent = msg || '';
+      el.style.display = msg ? 'block' : 'none';
+    }
+
+    function clamp(n,min,max){ const v = isNaN(n)?min:n; return Math.max(min, Math.min(max, v)); }
+
+    
+    // --- GS1 prefix lookup (subset) ---
+    const GS1_PREFIXES = [
+      {r:[0,19],   n:'USA & Canada'},
+      {r:[30,39],  n:'USA & Canada'},
+      {r:[60,139], n:'USA & Canada'},
+      {r:[300,379],n:'France'},
+      {r:[380,380],n:'Bulgaria'},
+      {r:[383,383],n:'Slovenia'},
+      {r:[385,385],n:'Croatia'},
+      {r:[387,387],n:'Bosnia & Herzegovina'},
+      {r:[389,389],n:'Montenegro'},
+      {r:[400,440],n:'Germany'},
+      {r:[460,469],n:'Russia'},
+      {r:[471,471],n:'Taiwan'},
+      {r:[474,474],n:'Estonia'},
+      {r:[475,475],n:'Latvia'},
+      {r:[477,477],n:'Lithuania'},
+      {r:[478,478],n:'Uzbekistan'},
+      {r:[479,479],n:'Sri Lanka'},
+      {r:[480,480],n:'Philippines'},
+      {r:[481,481],n:'Belarus'},
+      {r:[482,482],n:'Ukraine'},
+      {r:[484,484],n:'Moldova'},
+      {r:[485,485],n:'Armenia'},
+      {r:[486,486],n:'Georgia'},
+      {r:[487,487],n:'Kazakhstan'},
+      {r:[488,488],n:'Tajikistan'},
+      {r:[489,489],n:'Hong Kong'},
+      {r:[500,509],n:'United Kingdom'},
+      {r:[520,520],n:'Greece'},
+      {r:[528,528],n:'Lebanon'},
+      {r:[529,529],n:'Cyprus'},
+      {r:[530,530],n:'Albania'},
+      {r:[531,531],n:'North Macedonia'},
+      {r:[535,535],n:'Malta'},
+      {r:[539,539],n:'Ireland'},
+      {r:[540,549],n:'Belgium & Luxembourg'},
+      {r:[560,560],n:'Portugal'},
+      {r:[569,569],n:'Iceland'},
+      {r:[570,579],n:'Denmark'},
+      {r:[590,590],n:'Poland'},
+      {r:[594,594],n:'Romania'},
+      {r:[599,599],n:'Hungary'},
+      {r:[690,699],n:'China'},
+      {r:[730,739],n:'Sweden'}
+    
+      ,{r:[977,977],n:'Serial publications (ISSN)'}
+      ,{r:[978,979],n:'Bookland (ISBN)'}
+    ];
+    function gs1Lookup(prefix3){
+      const p = parseInt(prefix3,10);
+      if (isNaN(p)) return null;
+      for (const row of GS1_PREFIXES){
+        if (p>=row.r[0] && p<=row.r[1]) return row.n;
+      }
+      return null;
+    }
+    function updateGs1Info(value, fmt){
+      const box = document.getElementById('gs1InfoBox');
+      const spPrefix = document.getElementById('gs1Prefix');
+      const spCountry = document.getElementById('gs1Country');
+      if (!box || !spPrefix || !spCountry){ return; }
+      const f = fmt.toUpperCase();
+      let applicable = (f==='EAN13' || f==='UPCA');
+      if (!applicable || !value || value.length < 3){
+        box.style.display = 'none';
+        return;
+      }
+      const prefix3 = value.substring(0,3);
+      const country = gs1Lookup(prefix3) || 'Other GS1 Member Organization / Special use';
+      spPrefix.textContent = prefix3;
+      spCountry.textContent = country;
+      box.style.display = 'block';
+    }
+    
+    
+    // --- Check digit helpers (Mod 10, EAN/UPC/ITF) ---
+    function _mod10CheckDigitFromDigits(digits, weightFirstIs3){
+      // digits: array of integers 
+      // For EAN/
+      let sum = 0;
+      for (let i=0;i<digits.length;i++){
+        const pos = i+1;
+        const d = digits[i];
+        const w = (weightFirstIs3 ? (pos%2===1?3:1) : (pos%2===1?1:3));
+        sum += d * w;
+      }
+      const check = (10 - (sum % 10)) % 10;
+      return check;
+    }
+    function computeCheckDigitEAN13(value){ // 12 -> check
+      const digs = value.slice(0,12).split('').map(x=>parseInt(x,10));
+      return _mod10CheckDigitFromDigits(digs, false);
+    }
+    function computeCheckDigitEAN8(value){ // 7 -> check
+      const digs = value.slice(0,7).split('').map(x=>parseInt(x,10));
+      // For EAN-8, from left positions 1,3,5,7 are *3
+      return _mod10CheckDigitFromDigits(digs, true);
+    }
+    function computeCheckDigitUPCA(value){ // 11 -> check
+      const digs = value.slice(0,11).split('').map(x=>parseInt(x,10));
+      // For UPC-A from left, positions 1,3,5,7,9,11 are *3
+      return _mod10CheckDigitFromDigits(digs, true);
+    }
+    function computeCheckDigitITF14(value){ // 13 -> check
+      const digs = value.slice(0,13).split('').map(x=>parseInt(x,10));
+      // ITF-14 uses same weighting as EAN-13
+      return _mod10CheckDigitFromDigits(digs, false);
+    }
+    function updateCheckDigitInfo(value, fmt){
+      const box = document.getElementById('checkDigitBox');
+      const expEl = document.getElementById('checkExpected');
+      const statusEl = document.getElementById('checkStatus');
+      if (!box || !expEl || !statusEl){ return; }
+      const f = fmt.toUpperCase();
+      let expected = null, provided = null, show=false, valid=null;
+      if (f==='EAN13' && (value.length===12 || value.length===13)){
+        expected = computeCheckDigitEAN13(value);
+        if (value.length===13){ provided = parseInt(value[12],10); valid = (provided===expected); }
+        show = true;
+      } else if (f==='EAN8' && (value.length===7 || value.length===8)){
+        expected = computeCheckDigitEAN8(value);
+        if (value.length===8){ provided = parseInt(value[7],10); valid = (provided===expected); }
+        show = true;
+      } else if (f==='UPCA' && (value.length===11 || value.length===12)){
+        expected = computeCheckDigitUPCA(value);
+        if (value.length===12){ provided = parseInt(value[11],10); valid = (provided===expected); }
+        show = true;
+      } else if (f==='ITF14' && (value.length===13 || value.length===14)){
+        expected = computeCheckDigitITF14(value);
+        if (value.length===14){ provided = parseInt(value[13],10); valid = (provided===expected); }
+        show = true;
+      } else {
+        box.style.display = 'none';
+        return;
+      }
+      if (!show){ box.style.display='none'; return; }
+      expEl.textContent = expected!=null ? String(expected) : '—';
+      if (provided==null){ statusEl.textContent = 'Provide full code to validate'; statusEl.style.color = '#111'; }
+      else if (valid){ statusEl.textContent = 'Valid'; statusEl.style.color = '#2F7B3C'; }
+      else { statusEl.textContent = 'Invalid'; statusEl.style.color = '#b00020'; }
+      box.style.display = 'block';
+    }
+    
+    function updateDownloadState(){
+      const disabled = !lastSVGString;
+      const btns = [document.getElementById('btnSVG'), document.getElementById('btnPNG')];
+      btns.forEach(b => { if (!b) return; b.disabled = disabled; b.setAttribute('aria-disabled', disabled ? 'true' : 'false'); });
+    }
+
+    // --- Core ---
+	function copySVG(){
+  const svg = document.getElementById("barcodeSVG");
+  const svgString = new XMLSerializer().serializeToString(svg);
+  navigator.clipboard.writeText(svgString);
+}
+
+function copySVG(){
+  if(!lastSVGString) return;
+  navigator.clipboard.writeText(lastSVGString).then(function(){
+    alert("штрих-код успішно скопійовано!");
+  });
+}
+	
+    function generateBarcode(){
+      const fmtKey = document.getElementById('formatSelect').value;
+      const fmt = formatMap[fmtKey] || 'CODE128';
+      let value = document.getElementById('textInput').value;
+      value = sanitizeInput(value, fmtKey);
+      document.getElementById('textInput').value = value; // reflect sanitization
+
+      const check = validate(value, fmtKey);
+      if (!check.ok) { showError(check.msg); lastSVGString = null; const box=document.getElementById('gs1InfoBox'); if(box) box.style.display='none'; const cb=document.getElementById('checkDigitBox'); if(cb) cb.style.display='none'; updateDownloadState(); return; }
+      showError('');
+
+      const width = clamp(parseInt(document.getElementById('widthInput').value,10), 1, 6);
+      const height = clamp(parseInt(document.getElementById('heightInput').value,10), 30, 300);
+      const margin = clamp(parseInt(document.getElementById('marginInput').value,10), 0, 30);
+      const displayValue = document.getElementById('displayValue').checked;
+
+      const svg = document.getElementById('barcodeSVG');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      try {
+        JsBarcode(svg, value, {
+          format: fmt,
+          width: width,
+          height: height,
+          displayValue: displayValue,
+          margin: margin,
+          font: 'OCRBStd',
+          textAlign: 'center'
+        });
+        lastSVGString = new XMLSerializer().serializeToString(svg);
+        updateGs1Info(value, fmtKey);
+        updateCheckDigitInfo(value, fmtKey);
+      } catch (e) {
+        console.error(e);
+        showError('Помилка генерації barcode: ' + (e && e.message ? e.message : e));
+        lastSVGString = null;
+      }
+      updateDownloadState();
+    }
+
+    function wrapSVG(inner){
+      if (!inner) return '';
+      let svgEl;
+      try {
+        svgEl = new DOMParser().parseFromString(inner, 'image/svg+xml').documentElement;
+      } catch(e){
+        return inner;
+      }
+      const temp = document.createElementNS('http://www.w3.org/2000/svg','svg');
+      temp.setAttribute('xmlns','http://www.w3.org/2000/svg');
+      temp.innerHTML = svgEl.innerHTML;
+      document.body.appendChild(temp);
+      const bbox = temp.getBBox();
+      document.body.removeChild(temp);
+      const w = Math.ceil(bbox.width + bbox.x * 2 + 2);
+      const h = Math.ceil(bbox.height + bbox.y * 2 + 2);
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${inner}</svg>`;
+    }
+
+    function ensureBarcode(){
+      if (!lastSVGString){
+        alert('Generate a barcode first.');
+        return false;
+      }
+      return true;
+    }
+
+    function downloadSVG(){
+      if (!ensureBarcode()) return;
+      const wrapped = wrapSVG(lastSVGString);
+      const blob = new Blob([wrapped], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'barcode.svg';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    function downloadPNG(){
+      if (!ensureBarcode()) return;
+      try {
+        const svgText = wrapSVG(lastSVGString);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(svgBlob);
+        img.onload = function(){
+          const scale = 3; // upscale for crisp PNG
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          canvas.toBlob(function(blob){
+            if (!blob) { alert('Error creating PNG file'); return; }
+            const dl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = dl; a.download = 'barcode.png';
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(dl);
+          }, 'image/png', 1.0);
+        };
+        img.onerror = function(){ URL.revokeObjectURL(url); alert('Could not rasterize SVG to PNG.'); };
+        img.src = url;
+      } catch (err) {
+        console.error('PNG download error:', err);
+        alert('Error downloading PNG: ' + err.message);
+      }
+    }
+
+    // --- (Internal) simple self tests ---
+    function canEnsureBarcode(){ return !!lastSVGString; }
+    function runSelfTests(){
+      const results = [];
+      // Test 1: buttons disabled before first successful generation
+      const beforeDisabled = document.getElementById('btnSVG').disabled && document.getElementById('btnPNG').disabled;
+      results.push({name:'downloads disabled initially', pass: beforeDisabled});
+      // Test 2: generation populates SVG string
+      generateBarcode();
+      results.push({name:'lastSVGString set after generate', pass: canEnsureBarcode()});
+      // Test 3: buttons enabled after generation
+      const afterEnabled = !document.getElementById('btnSVG').disabled && !document.getElementById('btnPNG').disabled;
+      results.push({name:'downloads enabled after generate', pass: afterEnabled});
+      console.group('[48.22 Code Generator] Self tests');
+      results.forEach(r => console.log(`${r.pass ? '✔' : '✘'} ${r.name}`));
+      console.groupEnd();
+      // expose minimal, non-intrusive test output
+      const pre = document.getElementById('testResults');
+      if (pre) pre.textContent = results.map(r => `${r.pass ? '✔' : '✘'} ${r.name}`).join('\n');
+    }
+
+    // --- Boot ---
+    document.addEventListener('DOMContentLoaded', function(){
+      updateDownloadState();
+      // Auto-generate once for convenience
+      generateBarcode();
+      // run tiny self-tests (silent; results go to console and hidden <pre>)
+      setTimeout(runSelfTests, 0);
+    });
+  </script>
+</body></html>
